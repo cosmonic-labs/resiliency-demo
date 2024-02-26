@@ -1,0 +1,23 @@
+[package]
+name = "fly-io-metadata"
+version = "0.4.0"
+edition = "2021"
+resolver = "2"
+
+[dependencies]
+anyhow = "1"
+flytrap = { git = "https://github.com/protochron/flytrap", branch = "fix_truncation", default-features = false, features = ["dns", "regions", "detect", "http"] }
+hostname = "0.3"
+tracing = "0.1"
+tokio = { version = "1", features = [ "full" ] }
+wasmcloud-provider-sdk = "0.4"
+wit-bindgen-wrpc = "0.3"
+
+[[bin]]
+name = "fly_io_metadata"
+path = "src/main.rs"
+
+[profile.release]
+strip = true
+lto = true
+opt-level = "z"

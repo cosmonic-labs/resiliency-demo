@@ -1,0 +1,25 @@
+#!/bin/bash
+#export WASMCLOUD_CONFIG_SERVICE=true
+export WASMCLOUD_RPC_TIMEOUT_MS=4000
+export WASMCLOUD_STRUCTURED_LOGGING_ENABLED=true
+
+if [ -z "$WASMCLOUD_LATTICE" ]; then
+	echo "WASMCLOUD_LATTICE is not set"
+	exit 1
+fi
+
+if [ -z "$WASMCLOUD_JS_DOMAIN" ]; then
+  export WASMCLOUD_JS_DOMAIN=default
+else
+  export WASMCLOUD_JS_DOMAIN=$WASMCLOUD_JS_DOMAIN
+fi
+
+export WASMCLOUD_LATTICE=$WASMCLOUD_LATTICE
+
+for var in "${!WASMCLOUD_LABEL@}"; do
+  export $var="${!var}"
+done
+
+export WASMCLOUD_LABEL_fly_region=${FLY_REGION}
+export WASMCLOUD_LABEL_cloud=fly.io
+wasmcloud

@@ -1,0 +1,10 @@
+package cosmonic-labs:cloud-metadata@0.1.0;
+
+world imports {
+  import types;
+}
+
+world metadata-service {
+  include imports;
+  export service;
+}
