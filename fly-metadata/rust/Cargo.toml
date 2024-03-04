@@ -1,6 +1,6 @@
 [package]
 name = "fly-metadata"
-version = "0.1.0"
+version = "0.2.0"
 description = "Interface library for the fly-metadata metadata capability, "
 authors = [ "cosmonic.com" ]
 edition = "2021"

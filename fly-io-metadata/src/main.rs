@@ -54,9 +54,15 @@ impl Metadata for FlyIoMetadataProvider {
             None => return Err(RpcError::Other("failed to get region".to_string())),
         };
 
+        let region_info = Region {
+            city: format!("{} ({})", region.city.name, region.city.country),
+            code: region.code.to_string(),
+            name: region.name.to_string(),
+        };
+
         let metadata = GetResponse {
             app_name: app,
-            region: region.name.to_string(),
+            region: region_info,
             private_ip,
             machine_id: hostname.clone(),
         };

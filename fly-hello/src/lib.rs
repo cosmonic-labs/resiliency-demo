@@ -56,7 +56,7 @@ impl Guest for HttpServer {
 
         let target = lattice::TargetEntity::Link(None);
         let resp = call_sync(Some(&target), "protochron:fly_metadata/Metadata.Get", &[]);
-        let mut region: String = "".to_string();
+        let mut region: Region = Region::default();
         if let Ok(r) = resp {
             log(Level::Info, "fly-hello", "Got response from Metadata.Get");
             let get_response = match wasmbus_rpc::common::deserialize::<GetResponse>(&r) {
@@ -96,7 +96,7 @@ impl Guest for HttpServer {
         let data = reg
             .render_template(
                 std::str::from_utf8(&template.data).unwrap(),
-                &json!({"region": region}),
+                &json!({"code": region.code, "location": region.city}),
             )
             .unwrap();
 

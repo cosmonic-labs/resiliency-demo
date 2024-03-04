@@ -29,7 +29,16 @@ structure GetResponse {
     @required
     appName: String,
     @required
-    region: String,
+    region: Region,
+}
+
+structure Region {
+    @required
+    code: String,
+    @required
+    name: String,
+    @required
+    city: String,
 }
 
 /// Get a Fly Machine's metadata

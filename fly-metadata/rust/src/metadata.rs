@@ -33,8 +33,7 @@ pub struct GetResponse {
     #[serde(rename = "privateIP")]
     #[serde(default)]
     pub private_ip: String,
-    #[serde(default)]
-    pub region: String,
+    pub region: Region,
 }
 
 // Encode GetResponse as CBOR and append to output stream
@@ -55,7 +54,7 @@ where
     e.str("privateIP")?;
     e.str(&val.private_ip)?;
     e.str("region")?;
-    e.str(&val.region)?;
+    encode_region(e, &val.region)?;
     Ok(())
 }
 
@@ -64,18 +63,133 @@ where
 pub fn decode_get_response(
     d: &mut wasmbus_rpc::cbor::Decoder<'_>,
 ) -> Result<GetResponse, RpcError> {
+    let __result =
+        {
+            let mut app_name: Option<String> = None;
+            let mut machine_id: Option<String> = None;
+            let mut private_ip: Option<String> = None;
+            let mut region: Option<Region> = None;
+
+            let is_array = match d.datatype()? {
+                wasmbus_rpc::cbor::Type::Array => true,
+                wasmbus_rpc::cbor::Type::Map => false,
+                _ => {
+                    return Err(RpcError::Deser(
+                        "decoding struct GetResponse, expected array or map".to_string(),
+                    ))
+                }
+            };
+            if is_array {
+                let len = d.fixed_array()?;
+                for __i in 0..(len as usize) {
+                    match __i {
+                        0 => app_name = Some(d.str()?.to_string()),
+                        1 => machine_id = Some(d.str()?.to_string()),
+                        2 => private_ip = Some(d.str()?.to_string()),
+                        3 => {
+                            region = Some(decode_region(d).map_err(|e| {
+                                format!("decoding 'protochron.metadata#Region': {}", e)
+                            })?)
+                        }
+                        _ => d.skip()?,
+                    }
+                }
+            } else {
+                let len = d.fixed_map()?;
+                for __i in 0..(len as usize) {
+                    match d.str()? {
+                        "appName" => app_name = Some(d.str()?.to_string()),
+                        "machineID" => machine_id = Some(d.str()?.to_string()),
+                        "privateIP" => private_ip = Some(d.str()?.to_string()),
+                        "region" => {
+                            region = Some(decode_region(d).map_err(|e| {
+                                format!("decoding 'protochron.metadata#Region': {}", e)
+                            })?)
+                        }
+                        _ => d.skip()?,
+                    }
+                }
+            }
+            GetResponse {
+                app_name: if let Some(__x) = app_name {
+                    __x
+                } else {
+                    return Err(RpcError::Deser(
+                        "missing field GetResponse.app_name (#0)".to_string(),
+                    ));
+                },
+
+                machine_id: if let Some(__x) = machine_id {
+                    __x
+                } else {
+                    return Err(RpcError::Deser(
+                        "missing field GetResponse.machine_id (#1)".to_string(),
+                    ));
+                },
+
+                private_ip: if let Some(__x) = private_ip {
+                    __x
+                } else {
+                    return Err(RpcError::Deser(
+                        "missing field GetResponse.private_ip (#2)".to_string(),
+                    ));
+                },
+
+                region: if let Some(__x) = region {
+                    __x
+                } else {
+                    return Err(RpcError::Deser(
+                        "missing field GetResponse.region (#3)".to_string(),
+                    ));
+                },
+            }
+        };
+    Ok(__result)
+}
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Region {
+    #[serde(default)]
+    pub city: String,
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+// Encode Region as CBOR and append to output stream
+#[doc(hidden)]
+#[allow(unused_mut)]
+pub fn encode_region<W: wasmbus_rpc::cbor::Write>(
+    mut e: &mut wasmbus_rpc::cbor::Encoder<W>,
+    val: &Region,
+) -> RpcResult<()>
+where
+    <W as wasmbus_rpc::cbor::Write>::Error: std::fmt::Display,
+{
+    e.map(3)?;
+    e.str("city")?;
+    e.str(&val.city)?;
+    e.str("code")?;
+    e.str(&val.code)?;
+    e.str("name")?;
+    e.str(&val.name)?;
+    Ok(())
+}
+
+// Decode Region from cbor input stream
+#[doc(hidden)]
+pub fn decode_region(d: &mut wasmbus_rpc::cbor::Decoder<'_>) -> Result<Region, RpcError> {
     let __result = {
-        let mut app_name: Option<String> = None;
-        let mut machine_id: Option<String> = None;
-        let mut private_ip: Option<String> = None;
-        let mut region: Option<String> = None;
+        let mut city: Option<String> = None;
+        let mut code: Option<String> = None;
+        let mut name: Option<String> = None;
 
         let is_array = match d.datatype()? {
             wasmbus_rpc::cbor::Type::Array => true,
             wasmbus_rpc::cbor::Type::Map => false,
             _ => {
                 return Err(RpcError::Deser(
-                    "decoding struct GetResponse, expected array or map".to_string(),
+                    "decoding struct Region, expected array or map".to_string(),
                 ))
             }
         };
@@ -83,10 +197,9 @@ pub fn decode_get_response(
             let len = d.fixed_array()?;
             for __i in 0..(len as usize) {
                 match __i {
-                    0 => app_name = Some(d.str()?.to_string()),
-                    1 => machine_id = Some(d.str()?.to_string()),
-                    2 => private_ip = Some(d.str()?.to_string()),
-                    3 => region = Some(d.str()?.to_string()),
+                    0 => city = Some(d.str()?.to_string()),
+                    1 => code = Some(d.str()?.to_string()),
+                    2 => name = Some(d.str()?.to_string()),
                     _ => d.skip()?,
                 }
             }
@@ -94,44 +207,35 @@ pub fn decode_get_response(
             let len = d.fixed_map()?;
             for __i in 0..(len as usize) {
                 match d.str()? {
-                    "appName" => app_name = Some(d.str()?.to_string()),
-                    "machineID" => machine_id = Some(d.str()?.to_string()),
-                    "privateIP" => private_ip = Some(d.str()?.to_string()),
-                    "region" => region = Some(d.str()?.to_string()),
+                    "city" => city = Some(d.str()?.to_string()),
+                    "code" => code = Some(d.str()?.to_string()),
+                    "name" => name = Some(d.str()?.to_string()),
                     _ => d.skip()?,
                 }
             }
         }
-        GetResponse {
-            app_name: if let Some(__x) = app_name {
+        Region {
+            city: if let Some(__x) = city {
                 __x
             } else {
                 return Err(RpcError::Deser(
-                    "missing field GetResponse.app_name (#0)".to_string(),
+                    "missing field Region.city (#0)".to_string(),
                 ));
             },
 
-            machine_id: if let Some(__x) = machine_id {
+            code: if let Some(__x) = code {
                 __x
             } else {
                 return Err(RpcError::Deser(
-                    "missing field GetResponse.machine_id (#1)".to_string(),
+                    "missing field Region.code (#1)".to_string(),
                 ));
             },
 
-            private_ip: if let Some(__x) = private_ip {
+            name: if let Some(__x) = name {
                 __x
             } else {
                 return Err(RpcError::Deser(
-                    "missing field GetResponse.private_ip (#2)".to_string(),
-                ));
-            },
-
-            region: if let Some(__x) = region {
-                __x
-            } else {
-                return Err(RpcError::Deser(
-                    "missing field GetResponse.region (#3)".to_string(),
+                    "missing field Region.name (#2)".to_string(),
                 ));
             },
         }

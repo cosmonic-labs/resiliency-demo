@@ -616,7 +616,7 @@ checksum = "1676f435fc1dadde4d03e43f5d62b259e1ce5f40bd4ffb21db2b42ebe59c1382"
 
 [[package]]
 name = "fly-metadata"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "serde",
@@ -872,7 +872,7 @@ dependencies = [
 
 [[package]]
 name = "http-hello-world"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "fly-metadata",
  "handlebars 5.1.0",
