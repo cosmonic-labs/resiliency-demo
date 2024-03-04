@@ -11,7 +11,7 @@ spec:
     - name: fly-hello
       type: actor
       properties:
-        image: ghcr.io/protochron/argocd-demo/fly-hello:0.2.0
+        image: ghcr.io/protochron/argocd-demo/fly-hello:0.2.1
       traits:
         # Govern the spread/scheduling of the actor
         - type: daemonscaler
