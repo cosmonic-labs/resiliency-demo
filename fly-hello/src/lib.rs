@@ -5,6 +5,8 @@ wit_bindgen::generate!({
     },
 });
 
+use std::io::{BufRead, BufReader};
+
 use crate::wasmcloud::bus::lattice;
 use exports::wasi::http::incoming_handler::Guest;
 use fly_metadata::*;
@@ -15,6 +17,8 @@ use url::Url;
 use wasi::http::types::*;
 use wasi::logging::logging::*;
 use wasmcloud::bus::host::*;
+
+const BUF_CHUNK_READ: usize = 4096;
 
 #[derive(RustEmbed)]
 #[folder = "dist"]
@@ -96,17 +100,32 @@ impl Guest for HttpServer {
         let data = reg
             .render_template(
                 std::str::from_utf8(&template.data).unwrap(),
-                &json!({"code": region.code, "location": region.city}),
+                &json!({"code": region.code, "location": region.name}),
             )
             .unwrap();
 
         response.set_status_code(200).unwrap();
         let response_body = response.body().unwrap();
-        response_body
-            .write()
-            .unwrap()
-            .blocking_write_and_flush(data.as_bytes())
-            .unwrap();
+        let writer = response_body.write().unwrap();
+
+        // Have to read in 4096 byte chunks because that's the max size we can write to a stream at
+        // a time.
+        let mut reader = BufReader::with_capacity(BUF_CHUNK_READ, data.as_bytes());
+        loop {
+            let buffer = reader.fill_buf().unwrap();
+            let buf_len = buffer.len();
+            if buf_len == 0 {
+                break;
+            }
+            let amt = writer.check_write().expect("unable to check write");
+            if amt < BUF_CHUNK_READ as u64 {
+                writer.blocking_flush().expect("failed to flush");
+            }
+            writer.write(buffer).expect("unable to write from buffer");
+            reader.consume(buf_len);
+        }
+
+        writer.flush().expect("failed to flush response writer");
         OutgoingBody::finish(response_body, None).expect("failed to finish response body");
         ResponseOutparam::set(response_out, Ok(response));
     }
