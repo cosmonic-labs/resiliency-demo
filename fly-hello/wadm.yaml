@@ -3,7 +3,7 @@ kind: Application
 metadata:
   name: argocon-fly-demo
   annotations:
-    version: v0.1.0
+    version: v0.2.0
     description: "Demo for ArgoCon EU 2024 demonstrating deploying a wasmCloud application to fly.io"
     experimental: true
 spec:
@@ -11,12 +11,12 @@ spec:
     - name: fly-hello
       type: actor
       properties:
-        image: ghcr.io/protochron/argocd-demo/fly-hello:0.2.1
+        image: ghcr.io/protochron/argocd-demo/fly-hello:0.4.0
       traits:
         # Govern the spread/scheduling of the actor
         - type: daemonscaler
           properties:
-            replicas: 1
+            replicas: 20
             spread:
               - name: fly
                 requirements:
@@ -51,7 +51,7 @@ spec:
     - name: fly-metadata
       type: capability
       properties:
-        image: ghcr.io/protochron/argocd-demo/fly-io-metadata:0.2.0
+        image: ghcr.io/protochron/argocd-demo/fly-io-metadata:0.3.0
         contract: protochron:fly_metadata
       traits:
         - type: daemonscaler

@@ -5,26 +5,70 @@ wit_bindgen::generate!({
     },
 });
 
-use std::io::{BufRead, BufReader};
-
 use crate::wasmcloud::bus::lattice;
 use exports::wasi::http::incoming_handler::Guest;
 use fly_metadata::*;
 use handlebars::Handlebars;
 use rust_embed::RustEmbed;
 use serde_json::json;
+use std::io::Write;
 use url::Url;
 use wasi::http::types::*;
 use wasi::logging::logging::*;
 use wasmcloud::bus::host::*;
-
-const BUF_CHUNK_READ: usize = 4096;
 
 #[derive(RustEmbed)]
 #[folder = "dist"]
 struct Assets;
 
 struct HttpServer;
+
+// This struct implementation is from
+// https://github.com/wasmCloud/wasmCloud/blob/ef3955a754ab59d2597dd1ef1801ac667eaf19a5/crates/actor/src/wrappers/io.rs#L45-L89
+// Copied here for convenience so we don't have to depend on the wasmcloud crate that implements
+// it.
+pub struct OutputStreamWriter<'a> {
+    stream: &'a mut crate::wasi::io::streams::OutputStream,
+}
+
+impl<'a> From<&'a mut crate::wasi::io::streams::OutputStream> for OutputStreamWriter<'a> {
+    fn from(stream: &'a mut crate::wasi::io::streams::OutputStream) -> Self {
+        Self { stream }
+    }
+}
+
+impl std::io::Write for OutputStreamWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        use crate::wasi::io::streams::StreamError;
+        use std::io;
+
+        let n = match self.stream.check_write().map(std::num::NonZeroU64::new) {
+            Ok(Some(n)) => n,
+            Ok(None) | Err(StreamError::Closed) => return Ok(0),
+            Err(StreamError::LastOperationFailed(e)) => {
+                return Err(io::Error::new(io::ErrorKind::Other, e.to_debug_string()))
+            }
+        };
+        let n = n
+            .get()
+            .try_into()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let n = buf.len().min(n);
+        self.stream.write(&buf[..n]).map_err(|e| match e {
+            StreamError::Closed => io::ErrorKind::UnexpectedEof.into(),
+            StreamError::LastOperationFailed(e) => {
+                io::Error::new(io::ErrorKind::Other, e.to_debug_string())
+            }
+        })?;
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.stream
+            .blocking_flush()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    }
+}
 
 impl Guest for HttpServer {
     fn handle(request: IncomingRequest, response_out: ResponseOutparam) {
@@ -36,7 +80,7 @@ impl Guest for HttpServer {
 
         // this panics when curling to localhost
         //request.authority().unwrap();
-        // Instead you need to do this nonsense
+        // Instead you need to do this nonsense until wRPC is finished.
         let host_header = headers.get(&host_key)[0].clone();
         let host = std::str::from_utf8(&host_header).unwrap();
         let url = match Url::parse(format!("http://{}{}", host, path.as_str()).as_str()) {
@@ -106,26 +150,16 @@ impl Guest for HttpServer {
 
         response.set_status_code(200).unwrap();
         let response_body = response.body().unwrap();
-        let writer = response_body.write().unwrap();
 
-        // Have to read in 4096 byte chunks because that's the max size we can write to a stream at
-        // a time.
-        let mut reader = BufReader::with_capacity(BUF_CHUNK_READ, data.as_bytes());
-        loop {
-            let buffer = reader.fill_buf().unwrap();
-            let buf_len = buffer.len();
-            if buf_len == 0 {
-                break;
-            }
-            let amt = writer.check_write().expect("unable to check write");
-            if amt < BUF_CHUNK_READ as u64 {
-                writer.blocking_flush().expect("failed to flush");
-            }
-            writer.write(buffer).expect("unable to write from buffer");
-            reader.consume(buf_len);
+        // Apparently wasmtime is really sensitive to holding resources for too long, so this
+        // ensures that the writer is fully dropped by the time we want to finish the body stream.
+        {
+            let mut writer = response_body.write().unwrap();
+            let mut w = OutputStreamWriter::from(&mut writer);
+            w.write_all(data.as_bytes()).expect("failed to write");
+            w.flush().expect("failed to flush");
         }
 
-        writer.flush().expect("failed to flush response writer");
         OutgoingBody::finish(response_body, None).expect("failed to finish response body");
         ResponseOutparam::set(response_out, Ok(response));
     }

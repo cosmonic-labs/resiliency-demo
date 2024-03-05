@@ -46,7 +46,7 @@ impl Metadata for FlyIoMetadataProvider {
             ));
         }
 
-        let instance = &instances[0];
+        let instance = instance[0];
         let app = instance.app.clone();
         let private_ip = instance.private_ip.clone().to_string();
         let region = match instance.node.region() {
