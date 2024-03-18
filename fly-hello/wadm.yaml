@@ -5,7 +5,7 @@ metadata:
   annotations:
     version: v0.2.0
     description: "Demo for ArgoCon EU 2024 demonstrating deploying a wasmCloud application to fly.io"
-    experimental: true
+    experimental: "true"
 spec:
   components:
     - name: fly-hello
