@@ -184,10 +184,24 @@ fn not_found() -> OutgoingResponse {
 }
 
 fn handle_asset(url: Url) -> OutgoingResponse {
-    let response = OutgoingResponse::new(Fields::new());
+    let mut fields = Fields::new();
     log(Level::Info, "fly-hello", url.path());
     let path = url.path().strip_prefix('/').unwrap();
     if let Some(asset) = Assets::get(path) {
+        if path.contains(".js") {
+            let value = ["application/javascript".to_string().into_bytes()];
+            fields
+                .set(&"Content-Type".to_string(), &value)
+                .map_err(|e| {
+                    log(
+                        Level::Error,
+                        "fly-hello",
+                        format!("Error setting header: {}", e).as_str(),
+                    )
+                });
+        }
+
+        let response = OutgoingResponse::new(fields);
         response.set_status_code(200).unwrap();
         let response_body = response.body().unwrap();
         response_body.write().unwrap().write(&asset.data).unwrap();
