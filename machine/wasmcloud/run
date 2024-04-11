@@ -4,8 +4,6 @@ export WASMCLOUD_CTL_TOPIC_PREFIX=cosmo.ctl
 export WASMCLOUD_JS_DOMAIN=cosmonic
 export WASMCLOUD_RPC_TIMEOUT_MS=4000
 export WASMCLOUD_STRUCTURED_LOGGING_ENABLED=true
-export WASMCLOUD_LABEL_fly_region=${FLY_REGION}
-export WASMCLOUD_LABEL_cloud=fly.io
 
 
 if [ -z "$WASMCLOUD_LATTICE" ]; then
@@ -15,4 +13,10 @@ fi
 
 export WASMCLOUD_LATTICE=$WASMCLOUD_LATTICE
 
+for var in "${!WASMCLOUD_LABEL@}"; do
+  export $var="${!var}"
+done
+
+export WASMCLOUD_LABEL_fly_region=${FLY_REGION}
+export WASMCLOUD_LABEL_cloud=fly.io
 wasmcloud
