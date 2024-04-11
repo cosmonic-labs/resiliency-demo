@@ -35,7 +35,10 @@ impl Metadata for FlyIoMetadataProvider {
         let resolver = Resolver::new()
             .map_err(|e| RpcError::Other(format!("failed to build resolver: {e}")))?;
         // TODO can optimize this by only looking at a particular app using a linkdef.
-        let instances = resolver.instances().await.unwrap();
+        let instances = resolver
+            .instances()
+            .await
+            .map_err(|e| RpcError::Other(format!("failed to resolve instances: {e}")))?;
         let instance: Vec<&Instance> = instances
             .iter()
             .filter(|instance| *instance.node.id == hostname)

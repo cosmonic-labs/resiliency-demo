@@ -1,13 +1,13 @@
 [package]
 name = "fly-io-metadata"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 resolver = "2"
 
 [dependencies]
 async-trait = "0.1"
 fly-metadata = { path = "../fly-metadata/rust" }
-flytrap = { git = "https://github.com/protochron/flytrap", branch = "fix_requirements", default-features = false, features = ["dns", "regions", "detect", "http"] }
+flytrap = { git = "https://github.com/protochron/flytrap", branch = "fix_truncation", default-features = false, features = ["dns", "regions", "detect", "http"] }
 hostname = "0.3"
 tracing = "0.1"
 wasmbus-rpc = { version = "0.15", features = ["otel"] }

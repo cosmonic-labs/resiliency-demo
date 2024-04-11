@@ -51,7 +51,7 @@ spec:
     - name: fly-metadata
       type: capability
       properties:
-        image: ghcr.io/protochron/argocd-demo/fly-io-metadata:0.3.0
+        image: ghcr.io/protochron/argocd-demo/fly-io-metadata:0.3.1
         contract: protochron:fly_metadata
       traits:
         - type: daemonscaler
