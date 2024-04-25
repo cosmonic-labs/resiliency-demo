@@ -1,0 +1,19 @@
+interface types {
+  record region {
+    name: string,
+    code: option<string>,
+    city: option<string>,
+  }
+
+  record metadata {
+    private-ip: string,
+    public-ip: option<string>,
+    region: region,
+    id: string,
+  }
+}
+
+interface service {
+  use types.{region, metadata};
+  get: func() -> result<region>;
+}
