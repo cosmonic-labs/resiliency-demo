@@ -9,7 +9,6 @@ version = "0.6.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-fly-metadata = { path = "../fly-metadata/rust" }
 handlebars = "5"
 rust-embed = "8"
 serde = "1"
