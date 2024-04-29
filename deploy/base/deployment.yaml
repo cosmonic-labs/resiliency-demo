@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  labels:
+    app: valkey
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey
+  template:
+    metadata:
+      labels:
+        app: valkey
+    spec:
+      containers:
+      - name: valkey
+        image: valkey/valkey:7.2-bookworm
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+          - name: valkey-data
+            mountPath: /data
+      volumes:
+        - name: valkey-data
+          persistentVolumeClaim:
+            claimName: valkey-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  labels:
+    app: valkey
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: valkey
