@@ -1,0 +1,6 @@
+name = "Fly.io Metadata Provider"
+language = "rust"
+type = "provider"
+
+[provider]
+vendor = "Cosmonic"

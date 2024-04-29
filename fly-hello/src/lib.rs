@@ -1,21 +1,16 @@
-wit_bindgen::generate!({
-    world: "hello",
-    exports: {
-        "wasi:http/incoming-handler": HttpServer,
-    },
-});
+wit_bindgen::generate!();
 
-use crate::wasmcloud::bus::lattice;
+use cosmonic_labs::cloud_metadata::service;
 use exports::wasi::http::incoming_handler::Guest;
-use fly_metadata::*;
+//use fly_metadata::*;
 use handlebars::Handlebars;
 use rust_embed::RustEmbed;
 use serde_json::json;
-use std::io::Write;
+use std::{collections::BTreeMap, io::Write};
 use url::Url;
 use wasi::http::types::*;
+use wasi::keyvalue::{atomics, batch, store};
 use wasi::logging::logging::*;
-use wasmcloud::bus::host::*;
 
 #[derive(RustEmbed)]
 #[folder = "dist"]
@@ -87,10 +82,7 @@ impl Guest for HttpServer {
             Ok(u) => u,
             Err(e) => {
                 log(Level::Info, "fly-hello", format!("error: {}", e).as_str());
-                let response = OutgoingResponse::new(Fields::new());
-                response.set_status_code(500).unwrap();
-                let response_body = response.body().unwrap();
-                OutgoingBody::finish(response_body, None).expect("failed to finish response body");
+                let response = error(format!("Error parsing URL: {}", e));
                 ResponseOutparam::set(response_out, Ok(response));
                 return;
             }
@@ -102,49 +94,107 @@ impl Guest for HttpServer {
             return;
         }
 
-        let target = lattice::TargetEntity::Link(None);
-        let resp = call_sync(Some(&target), "protochron:fly_metadata/Metadata.Get", &[]);
-        let mut region: Region = Region::default();
-        if let Ok(r) = resp {
-            log(Level::Info, "fly-hello", "Got response from Metadata.Get");
-            let get_response = match wasmbus_rpc::common::deserialize::<GetResponse>(&r) {
-                Ok(get) => get,
-                Err(_) => {
-                    let err = error();
-                    ResponseOutparam::set(response_out, Ok(err));
-                    return;
-                }
-            };
-            log(
-                Level::Info,
-                "fly-hello",
-                &format!("Got response: {:?}", get_response),
-            );
-
-            region = get_response.region;
-        } else {
-            log(Level::Error, "fly-hello", "Error calling Metadata.Get");
-            if let Err(e) = resp {
-                let response = OutgoingResponse::new(Fields::new());
-                response.set_status_code(500).unwrap();
-                let response_body = response.body().unwrap();
-                response_body
-                    .write()
-                    .unwrap()
-                    .blocking_write_and_flush(format!("Error: {}", e).as_bytes())
-                    .unwrap();
-                OutgoingBody::finish(response_body, None).expect("failed to finish response body");
+        let metadata = match service::get() {
+            Ok(m) => m,
+            Err(e) => {
+                log(
+                    Level::Error,
+                    "fly-hello",
+                    format!("Error getting metadata: {}", e).as_str(),
+                );
+                let response = error(format!("Error getting metadata: {}", e));
                 ResponseOutparam::set(response_out, Ok(response));
                 return;
             }
+        };
+
+        let region = metadata.region;
+        let code = region.code.clone().unwrap_or_default();
+        log(Level::Error, "fly-hello", "Error calling Metadata.Get");
+
+        // The redis store doesn't support a bucket name
+        let bucket = match store::open("") {
+            Ok(b) => b,
+            Err(e) => {
+                log(
+                    Level::Error,
+                    "fly-hello",
+                    format!("Error opening store: {}", e).as_str(),
+                );
+                let response = error(format!("Error opening store: {}", e));
+                ResponseOutparam::set(response_out, Ok(response));
+                return;
+            }
+        };
+
+        // TODO do something with the user agent?
+        //let user_agent_key = "User-Agent".to_string();
+        //let user_agent_header = headers.get(&user_agent_key)[0].clone();
+        //if let Err(e) = bucket.set("foo", &user_agent_header) {
+        //    log(
+        //        Level::Error,
+        //        "fly-hello",
+        //        format!("Error setting key: {}", e).as_str(),
+        //    );
+        //    let response = error(format!("Error setting key: {}", e));
+        //    ResponseOutparam::set(response_out, Ok(response));
+        //    return;
+        //};
+        if let Err(e) = atomics::increment(&bucket, code.as_str(), 1) {
+            log(
+                Level::Error,
+                "fly-hello",
+                format!("Error incrementing key: {}", e).as_str(),
+            );
+            let response = error(format!("Error incrementing key: {}", e));
+            ResponseOutparam::set(response_out, Ok(response));
+            return;
         }
+
+        let mut keys = Vec::new();
+        loop {
+            match bucket.list_keys(None) {
+                Ok(k) => {
+                    keys.extend(k.keys);
+                    if k.cursor.is_none() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    log(
+                        Level::Error,
+                        "fly-hello",
+                        format!("Error listing keys: {}", e).as_str(),
+                    );
+                    break;
+                }
+            };
+        }
+
+        let values = match batch::get_many(&bucket, &keys) {
+            Ok(v) => v.iter().filter_map(|v| v.as_ref()).cloned().fold(
+                BTreeMap::new(),
+                |mut acc, (k, v)| {
+                    acc.insert(k, String::from_utf8_lossy(&v).to_string());
+                    acc
+                },
+            ),
+            Err(e) => {
+                log(
+                    Level::Error,
+                    "fly-hello",
+                    format!("Error getting values: {}", e).as_str(),
+                );
+                BTreeMap::new()
+            }
+        };
 
         let template = Assets::get("index.html").unwrap();
         let reg = Handlebars::new();
         let data = reg
             .render_template(
                 std::str::from_utf8(&template.data).unwrap(),
-                &json!({"code": region.code, "location": region.name}),
+                &json!({"code": code, "location": region.name, "region_data": values}),
             )
             .unwrap();
 
@@ -165,11 +215,16 @@ impl Guest for HttpServer {
     }
 }
 
-fn error() -> OutgoingResponse {
+fn error(message: String) -> OutgoingResponse {
     let response = OutgoingResponse::new(Fields::new());
     response.set_status_code(500).unwrap();
     let response_body = response.body().unwrap();
     response_body.write().unwrap();
+    response_body
+        .write()
+        .unwrap()
+        .blocking_write_and_flush(format!("Error: {}", message).as_bytes())
+        .unwrap();
     OutgoingBody::finish(response_body, None).expect("failed to finish response body");
     response
 }
@@ -184,21 +239,19 @@ fn not_found() -> OutgoingResponse {
 }
 
 fn handle_asset(url: Url) -> OutgoingResponse {
-    let mut fields = Fields::new();
+    let fields = Fields::new();
     log(Level::Info, "fly-hello", url.path());
     let path = url.path().strip_prefix('/').unwrap();
     if let Some(asset) = Assets::get(path) {
         if path.contains(".js") {
             let value = ["application/javascript".to_string().into_bytes()];
-            fields
-                .set(&"Content-Type".to_string(), &value)
-                .map_err(|e| {
-                    log(
-                        Level::Error,
-                        "fly-hello",
-                        format!("Error setting header: {}", e).as_str(),
-                    )
-                });
+            if let Err(e) = fields.set(&"Content-Type".to_string(), &value) {
+                log(
+                    Level::Error,
+                    "fly-hello",
+                    format!("Error setting header: {}", e).as_str(),
+                )
+            }
         }
 
         let response = OutgoingResponse::new(fields);
@@ -210,3 +263,4 @@ fn handle_asset(url: Url) -> OutgoingResponse {
     }
     not_found()
 }
+export!(HttpServer);

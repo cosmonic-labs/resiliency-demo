@@ -1,0 +1,157 @@
+diff --git a/fly-io-metadata/src/main.rs b/fly-io-metadata/src/main.rs
+index 94b42e1..c57194a 100644
+--- a/fly-io-metadata/src/main.rs
++++ b/fly-io-metadata/src/main.rs
+@@ -1,74 +1,112 @@
+ //! fly-io-metadata capability provider
+ //!
+ //!
+-use fly_metadata::*;
++use anyhow::{anyhow, bail, Context as _};
+ use flytrap::{Instance, Resolver};
+-use wasmbus_rpc::provider::prelude::*;
++use tracing::info;
++use wasmcloud_provider_sdk::core::HostData;
++use wasmcloud_provider_sdk::{
++    get_connection, load_host_data, run_provider, Context, LinkConfig, Provider,
++};
+ 
+-// main (via provider_main) initializes the threaded tokio executor,
+-// listens to lattice rpcs, handles actor links,
+-// and returns only when it receives a shutdown message
+-//
+-fn main() -> Result<(), Box<dyn std::error::Error>> {
+-    provider_main(
+-        FlyIoMetadataProvider::default(),
+-        Some("FlyIoMetadata".to_string()),
+-    )?;
++use cosmonic_labs::cloud_metadata::types::{Error, Metadata, Region};
+ 
+-    eprintln!("fly-io-metadata provider exiting");
++wit_bindgen_wrpc::generate!();
++
++#[tokio::main]
++async fn main() -> Result<(), Box<dyn std::error::Error>> {
++    FlyIoMetadataProvider::run().await?;
++    eprintln!("Long running operation provider exiting");
+     Ok(())
+ }
+ 
+-/// fly-io-metadata capability provider implementation
+-#[derive(Default, Clone, Provider)]
+-#[services(Metadata)]
++#[derive(Default, Clone)]
+ struct FlyIoMetadataProvider {}
+ 
+-/// use default implementations of provider message handlers
+-impl ProviderDispatch for FlyIoMetadataProvider {}
+-impl ProviderHandler for FlyIoMetadataProvider {}
++impl FlyIoMetadataProvider {
++    async fn run() -> anyhow::Result<()> {
++        let host_data = load_host_data().context("failed to load host data")?;
++        let provider = Self::from_host_data(host_data);
++        let shutdown = run_provider(provider.clone(), "operations-provider")
++            .await
++            .context("failed to run provider")?;
++        let connection = get_connection();
++        eprintln!("here");
++        serve(
++            &connection.get_wrpc_client(connection.provider_key()),
++            provider,
++            shutdown,
++        )
++        .await
++    }
++
++    pub fn from_host_data(host_data: &HostData) -> FlyIoMetadataProvider {
++        FlyIoMetadataProvider {
++            ..Default::default()
++        }
++    }
++}
++
++impl Provider for FlyIoMetadataProvider {
++    async fn receive_link_config_as_target(
++        &self,
++        LinkConfig {
++            source_id, config, ..
++        }: LinkConfig<'_>,
++    ) -> anyhow::Result<()> {
++        info!(
++            source_id,
++            "received link configuration for component {:?}", config
++        );
++        Ok(())
++    }
+ 
+-#[async_trait]
+-impl Metadata for FlyIoMetadataProvider {
+-    async fn get(&self, _ctx: &Context) -> RpcResult<GetResponse> {
++    async fn delete_link(&self, _source_id: &str) -> anyhow::Result<()> {
++        Ok(())
++    }
++}
++
++impl exports::cosmonic_labs::cloud_metadata::service::Handler<Option<Context>>
++    for FlyIoMetadataProvider
++{
++    async fn get(&self, _ctx: Option<Context>) -> anyhow::Result<Result<Metadata, Error>> {
+         let hostname = hostname::get()?.to_str().unwrap().to_string();
+-        let resolver = Resolver::new()
+-            .map_err(|e| RpcError::Other(format!("failed to build resolver: {e}")))?;
++        let resolver = Resolver::new().map_err(|e| Error {
++            message: format!("failed to build resolver: {e}"),
++        })?;
+         // TODO can optimize this by only looking at a particular app using a linkdef.
+-        let instances = resolver
+-            .instances()
+-            .await
+-            .map_err(|e| RpcError::Other(format!("failed to resolve instances: {e}")))?;
++        let instances = resolver.instances().await.map_err(|e| Error {
++            message: format!("failed to resolve instances: {e}"),
++        })?;
+         let instance: Vec<&Instance> = instances
+             .iter()
+             .filter(|instance| *instance.node.id == hostname)
+             .collect();
+         if instance.len() != 1 {
+-            return Err(RpcError::Other(
+-                "somehow ended up finding more than one or 0 matches".to_string(),
+-            ));
++            bail!("somehow ended up finding more than one or 0 matches".to_string());
+         }
+ 
+         let instance = instance[0];
+-        let app = instance.app.clone();
++        //let app = instance.app.clone();
+         let private_ip = instance.private_ip.clone().to_string();
+         let region = match instance.node.region() {
+             Some(r) => r,
+-            None => return Err(RpcError::Other("failed to get region".to_string())),
++            None => bail!("failed to get region"),
+         };
+ 
+-        let region_info = Region {
+-            city: format!("{} ({})", region.city.name, region.city.country),
+-            code: region.code.to_string(),
++        let region_rec = Region {
++            city: Some(format!("{} ({})", region.city.name, region.city.country)),
++            code: Some(region.code.to_string()),
+             name: region.name.to_string(),
+         };
+ 
+-        let metadata = GetResponse {
+-            app_name: app,
+-            region: region_info,
++        let metadata = Metadata {
++            region: region_rec,
++            public_ip: None,
+             private_ip,
+-            machine_id: hostname.clone(),
++            id: hostname.clone(),
+         };
+-        Ok(metadata)
++
++        Ok(Ok(metadata))
+     }
+ }
