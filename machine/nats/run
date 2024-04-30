@@ -9,4 +9,11 @@ else
 	exit 1
 fi
 
+if [ -n "$NATS_ADDR" ]; then
+  export NATS_ADDR="$NATS_ADDR"
+else
+  echo "No cluster configuration provided"
+  exit 1
+fi
+
 nats-server -js -c /etc/service/nats/nats.conf

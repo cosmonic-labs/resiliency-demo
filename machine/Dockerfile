@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM debian:bookworm
-ARG NATS_SERVER=2.10.11
-ARG WASMCLOUD_VERSION=0.82.0
+ARG NATS_SERVER=2.10.14
+ARG WASMCLOUD_VERSION=1.0.0
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y runit curl && \
