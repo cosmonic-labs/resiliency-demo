@@ -1,5 +1,5 @@
 [package]
-name = "fly-hello"
+name = "cloud-hello"
 edition = "2021"
 version = "0.6.0"
 

@@ -3,20 +3,20 @@ kind: Application
 metadata:
   name: resiliency-demo
   annotations:
-    version: v0.2.11
+    version: v0.3.0
     description: "Demo on Fly.io demonstrating the resiliency features of wasmCloud"
     experimental: "true"
 spec:
   components:
-    - name: fly-hello
+    - name: cloud-hello
       type: component
       properties:
-        image: ghcr.io/cosmonic-labs/fly-hello:latest
+        image: ghcr.io/cosmonic-labs/cloud-hello:latest
       traits:
         # Govern the spread/scheduling of the actor
         - type: daemonscaler
           properties:
-            replicas: 200
+            replicas: 50
             spread:
               - name: fly
                 requirements:
@@ -24,7 +24,7 @@ spec:
         - type: link
           properties:
             target: keyvalue
-            namespace: wasi
+            namespace: wrpc
             package: keyvalue
             interfaces: [store, atomics, batch, increment]
             target_config:

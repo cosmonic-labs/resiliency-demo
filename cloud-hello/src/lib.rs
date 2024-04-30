@@ -2,7 +2,6 @@ wit_bindgen::generate!();
 
 use cosmonic_labs::cloud_metadata::service;
 use exports::wasi::http::incoming_handler::Guest;
-//use fly_metadata::*;
 use handlebars::Handlebars;
 use rust_embed::RustEmbed;
 use serde::Serialize;
@@ -27,6 +26,8 @@ struct UAStats {
 }
 
 type RegionTotals = BTreeMap<String, UAStats>;
+
+const COMPONENT_NAME: &str = "cloud-hello";
 
 // This struct implementation is from
 // https://github.com/wasmCloud/wasmCloud/blob/ef3955a754ab59d2597dd1ef1801ac667eaf19a5/crates/actor/src/wrappers/io.rs#L45-L89
@@ -78,15 +79,19 @@ impl std::io::Write for OutputStreamWriter<'_> {
 impl Guest for HttpServer {
     fn handle(request: IncomingRequest, response_out: ResponseOutparam) {
         let response = OutgoingResponse::new(Fields::new());
-        log(Level::Info, "fly-hello", "handling request");
+        log(Level::Info, COMPONENT_NAME, "handling request");
         let path = request.path_with_query().unwrap();
-        log(Level::Info, "fly-hello", path.as_str());
+        log(Level::Info, COMPONENT_NAME, path.as_str());
         let headers = request.headers();
 
-        log(Level::Info, "fly-hello", format!("path {}", path).as_str());
         log(
             Level::Info,
-            "fly-hello",
+            COMPONENT_NAME,
+            format!("path {}", path).as_str(),
+        );
+        log(
+            Level::Info,
+            COMPONENT_NAME,
             format!("headers {:?}", headers).as_str(),
         );
 
@@ -95,10 +100,15 @@ impl Guest for HttpServer {
         // Instead you need to do this nonsense until wRPC is finished.
         //let host_header = headers.get(&host_key)[0].clone();
         //let host = std::str::from_utf8(&host_header).unwrap();
+        // TODO replace with axum's router
         let url = match Url::parse(format!("whatever:{}", path.as_str()).as_str()) {
             Ok(u) => u,
             Err(e) => {
-                log(Level::Info, "fly-hello", format!("error: {}", e).as_str());
+                log(
+                    Level::Info,
+                    COMPONENT_NAME,
+                    format!("error: {}", e).as_str(),
+                );
                 let response = error(format!("Error parsing URL: {}", e));
                 ResponseOutparam::set(response_out, Ok(response));
                 return;
@@ -116,7 +126,7 @@ impl Guest for HttpServer {
             Err(e) => {
                 log(
                     Level::Error,
-                    "fly-hello",
+                    COMPONENT_NAME,
                     format!("Error getting metadata: {}", e).as_str(),
                 );
                 let response = error(format!("Error getting metadata: {}", e));
@@ -147,7 +157,7 @@ impl Guest for HttpServer {
         if let Err(e) = atomics::increment("", code.as_str(), 1) {
             log(
                 Level::Error,
-                "fly-hello",
+                COMPONENT_NAME,
                 format!("Error incrementing key: {}", e).as_str(),
             );
         }
@@ -164,7 +174,7 @@ impl Guest for HttpServer {
                 {
                     log(
                         Level::Error,
-                        "fly-hello",
+                        COMPONENT_NAME,
                         format!("Error incrementing key: {}", e).as_str(),
                     );
                 };
@@ -173,7 +183,7 @@ impl Guest for HttpServer {
                 {
                     log(
                         Level::Error,
-                        "fly-hello",
+                        COMPONENT_NAME,
                         format!("Error incrementing key: {}", e).as_str(),
                     );
                 };
@@ -194,7 +204,7 @@ impl Guest for HttpServer {
                 Err(e) => {
                     log(
                         Level::Error,
-                        "fly-hello",
+                        COMPONENT_NAME,
                         format!("Error listing keys: {}", e).as_str(),
                     );
                     break;
@@ -214,7 +224,11 @@ impl Guest for HttpServer {
         //}
         let mut data = BTreeMap::new();
         for key in keys {
-            log(Level::Info, "fly-hello", format!("key: {}", key).as_str());
+            log(
+                Level::Info,
+                COMPONENT_NAME,
+                format!("key: {}", key).as_str(),
+            );
             if let Ok(Some(v)) = store::get("", key.as_str()) {
                 data.insert(key, String::from_utf8_lossy(&v).to_string());
             };
@@ -273,48 +287,6 @@ impl Guest for HttpServer {
                     .or_insert(count);
             });
 
-        //let region_counts: BTreeMap<String, String> = data
-        //    .iter()
-        //    .filter_map(|(k, v)| {
-        //        if !k.contains(':') {
-        //            Some((k.clone(), v.clone()))
-        //        } else {
-        //            None
-        //        }
-        //    })
-        //    .collect();
-
-        //let os_counts: BTreeMap<String, String> = data
-        //    .iter()
-        //    .filter_map(|(k, v)| {
-        //        if k.contains(":os:") {
-        //            let parts = k.split(':').collect::<Vec<&str>>();
-        //            Some((parts[0].to_string(), parts[2].to_string()))
-        //        } else {
-        //            None
-        //        }
-        //    })
-        //    .collect();
-
-        // TODO rely on this once batch works
-        //let region_counts = match batch::get_many("", &keys) {
-        //    Ok(v) => v.iter().filter_map(|v| v.as_ref()).cloned().fold(
-        //        BTreeMap::new(),
-        //        |mut acc, (k, v)| {
-        //            acc.insert(k, String::from_utf8_lossy(&v).to_string());
-        //            acc
-        //        },
-        //    ),
-        //    Err(e) => {
-        //        log(
-        //            Level::Error,
-        //            "fly-hello",
-        //            format!("Error getting values: {}", e).as_str(),
-        //        );
-        //        BTreeMap::new()
-        //    }
-        //};
-        //
         let region_json = serde_json::to_string(&totals).unwrap();
 
         let template = Assets::get("index.html").unwrap();
@@ -368,7 +340,7 @@ fn not_found() -> OutgoingResponse {
 
 fn handle_asset(url: Url) -> OutgoingResponse {
     let fields = Fields::new();
-    log(Level::Info, "fly-hello", url.path());
+    log(Level::Info, COMPONENT_NAME, url.path());
     let path = url.path().strip_prefix('/').unwrap();
     if let Some(asset) = Assets::get(path) {
         if path.contains(".js") {
@@ -376,7 +348,7 @@ fn handle_asset(url: Url) -> OutgoingResponse {
             if let Err(e) = fields.set(&"Content-Type".to_string(), &value) {
                 log(
                     Level::Error,
-                    "fly-hello",
+                    COMPONENT_NAME,
                     format!("Error setting header: {}", e).as_str(),
                 )
             }
