@@ -4,7 +4,7 @@ world hello {
   export wasi:http/incoming-handler@0.2.0;
   import wasi:logging/logging;
   import cosmonic-labs:cloud-metadata/service@0.1.0;
-  import wasi:keyvalue/store@0.2.0-draft;
-  import wasi:keyvalue/atomics@0.2.0-draft;
-  import wasi:keyvalue/batch@0.2.0-draft;
+  import wrpc:keyvalue/store@0.2.0-draft;
+  import wrpc:keyvalue/atomics@0.2.0-draft;
+  import wrpc:keyvalue/batch@0.2.0-draft;
 }

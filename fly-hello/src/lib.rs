@@ -5,18 +5,28 @@ use exports::wasi::http::incoming_handler::Guest;
 //use fly_metadata::*;
 use handlebars::Handlebars;
 use rust_embed::RustEmbed;
+use serde::Serialize;
 use serde_json::json;
 use std::{collections::BTreeMap, io::Write};
 use url::Url;
 use wasi::http::types::*;
-use wasi::keyvalue::{atomics, batch, store};
 use wasi::logging::logging::*;
+use wrpc::keyvalue::{atomics, batch, store};
 
 #[derive(RustEmbed)]
 #[folder = "dist"]
 struct Assets;
 
 struct HttpServer;
+
+#[derive(Serialize)]
+struct UAStats {
+    os: BTreeMap<String, u64>,
+    browsers: BTreeMap<String, u64>,
+    visits: u64,
+}
+
+type RegionTotals = BTreeMap<String, UAStats>;
 
 // This struct implementation is from
 // https://github.com/wasmCloud/wasmCloud/blob/ef3955a754ab59d2597dd1ef1801ac667eaf19a5/crates/actor/src/wrappers/io.rs#L45-L89
@@ -72,7 +82,6 @@ impl Guest for HttpServer {
         let path = request.path_with_query().unwrap();
         log(Level::Info, "fly-hello", path.as_str());
         let headers = request.headers();
-        let host_key = "Host".to_string();
 
         log(Level::Info, "fly-hello", format!("path {}", path).as_str());
         log(
@@ -119,53 +128,68 @@ impl Guest for HttpServer {
         let region = metadata.region;
         let code = region.code.clone().unwrap_or_default();
 
+        // wasi:keyvalue code
         // The redis store doesn't support a bucket name
-        let bucket = match store::open("") {
-            Ok(b) => b,
-            Err(e) => {
-                log(
-                    Level::Error,
-                    "fly-hello",
-                    format!("Error opening store: {}", e).as_str(),
-                );
-                let response = error(format!("Error opening store: {}", e));
-                ResponseOutparam::set(response_out, Ok(response));
-                return;
-            }
-        };
-
-        // TODO do something with the user agent?
-        //let user_agent_key = "User-Agent".to_string();
-        //let user_agent_header = headers.get(&user_agent_key)[0].clone();
-        //if let Err(e) = bucket.set("foo", &user_agent_header) {
-        //    log(
-        //        Level::Error,
-        //        "fly-hello",
-        //        format!("Error setting key: {}", e).as_str(),
-        //    );
-        //    let response = error(format!("Error setting key: {}", e));
-        //    ResponseOutparam::set(response_out, Ok(response));
-        //    return;
+        //let bucket = match store::open("") {
+        //    Ok(b) => b,
+        //    Err(e) => {
+        //        log(
+        //            Level::Error,
+        //            "fly-hello",
+        //            format!("Error opening store: {}", e).as_str(),
+        //        );
+        //        let response = error(format!("Error opening store: {}", e));
+        //        ResponseOutparam::set(response_out, Ok(response));
+        //        return;
+        //    }
         //};
-        if let Err(e) = atomics::increment(&bucket, code.as_str(), 1) {
+
+        if let Err(e) = atomics::increment("", code.as_str(), 1) {
             log(
                 Level::Error,
                 "fly-hello",
                 format!("Error incrementing key: {}", e).as_str(),
             );
-            let response = error(format!("Error incrementing key: {}", e));
-            ResponseOutparam::set(response_out, Ok(response));
-            return;
         }
 
+        let user_agent_key = "User-Agent".to_string();
+        let user_agent_header = headers.get(&user_agent_key);
+        if !user_agent_header.is_empty() {
+            let user_agent_header = user_agent_header[0].clone();
+            let parser = woothee::parser::Parser::new();
+            let result = parser.parse(std::str::from_utf8(&user_agent_header).unwrap());
+            if let Some(res) = result {
+                if let Err(e) =
+                    atomics::increment("", format!("{}:browser:{}", code, res.name).as_str(), 1)
+                {
+                    log(
+                        Level::Error,
+                        "fly-hello",
+                        format!("Error incrementing key: {}", e).as_str(),
+                    );
+                };
+                if let Err(e) =
+                    atomics::increment("", format!("{}:os:{}", code, res.os).as_str(), 1)
+                {
+                    log(
+                        Level::Error,
+                        "fly-hello",
+                        format!("Error incrementing key: {}", e).as_str(),
+                    );
+                };
+            }
+        };
+
         let mut keys = Vec::new();
+        let mut cursor = None;
         loop {
-            match bucket.list_keys(None) {
+            match store::list_keys("", cursor) {
                 Ok(k) => {
                     keys.extend(k.keys);
                     if k.cursor.is_none() {
                         break;
                     }
+                    cursor = k.cursor;
                 }
                 Err(e) => {
                     log(
@@ -178,15 +202,102 @@ impl Guest for HttpServer {
             };
         }
 
-        let mut region_counts = BTreeMap::new();
+        let mut totals = RegionTotals::new();
+
+        // wasi:keyvalue code
+        //let mut region_counts = BTreeMap::new();
+        //for key in keys {
+        //    log(Level::Info, "fly-hello", format!("key: {}", key).as_str());
+        //    if let Ok(Some(v)) = bucket.get(key.as_str()) {
+        //        region_counts.insert(key, String::from_utf8_lossy(&v).to_string());
+        //    };
+        //}
+        let mut data = BTreeMap::new();
         for key in keys {
             log(Level::Info, "fly-hello", format!("key: {}", key).as_str());
-            if let Ok(Some(v)) = bucket.get(key.as_str()) {
-                region_counts.insert(key, String::from_utf8_lossy(&v).to_string());
+            if let Ok(Some(v)) = store::get("", key.as_str()) {
+                data.insert(key, String::from_utf8_lossy(&v).to_string());
             };
         }
 
-        //let values = match batch::get_many(&bucket, &keys) {
+        data.iter()
+            .filter(|(k, _)| !k.contains(':'))
+            .for_each(|(k, v)| {
+                totals
+                    .entry(k.clone())
+                    .or_insert(UAStats {
+                        os: BTreeMap::new(),
+                        browsers: BTreeMap::new(),
+                        visits: 0,
+                    })
+                    .visits += v.parse::<u64>().unwrap();
+            });
+
+        data.iter()
+            .filter(|(k, _)| k.contains(":os:"))
+            .for_each(|(k, v)| {
+                let parts = k.split(':').collect::<Vec<&str>>();
+                let region = parts[0].to_string();
+                let os = parts[2].to_string();
+                let count = v.parse::<u64>().unwrap();
+                totals
+                    .entry(region.clone())
+                    .or_insert(UAStats {
+                        os: BTreeMap::new(),
+                        browsers: BTreeMap::new(),
+                        visits: 0,
+                    })
+                    .os
+                    .entry(os)
+                    .and_modify(|e| *e += count)
+                    .or_insert(count);
+            });
+
+        data.iter()
+            .filter(|(k, _)| k.contains(":browser:"))
+            .for_each(|(k, v)| {
+                let parts = k.split(':').collect::<Vec<&str>>();
+                let region = parts[0].to_string();
+                let browser = parts[2].to_string();
+                let count = v.parse::<u64>().unwrap();
+                totals
+                    .entry(region.clone())
+                    .or_insert(UAStats {
+                        os: BTreeMap::new(),
+                        browsers: BTreeMap::new(),
+                        visits: 0,
+                    })
+                    .browsers
+                    .entry(browser)
+                    .and_modify(|e| *e += count)
+                    .or_insert(count);
+            });
+
+        //let region_counts: BTreeMap<String, String> = data
+        //    .iter()
+        //    .filter_map(|(k, v)| {
+        //        if !k.contains(':') {
+        //            Some((k.clone(), v.clone()))
+        //        } else {
+        //            None
+        //        }
+        //    })
+        //    .collect();
+
+        //let os_counts: BTreeMap<String, String> = data
+        //    .iter()
+        //    .filter_map(|(k, v)| {
+        //        if k.contains(":os:") {
+        //            let parts = k.split(':').collect::<Vec<&str>>();
+        //            Some((parts[0].to_string(), parts[2].to_string()))
+        //        } else {
+        //            None
+        //        }
+        //    })
+        //    .collect();
+
+        // TODO rely on this once batch works
+        //let region_counts = match batch::get_many("", &keys) {
         //    Ok(v) => v.iter().filter_map(|v| v.as_ref()).cloned().fold(
         //        BTreeMap::new(),
         //        |mut acc, (k, v)| {
@@ -203,13 +314,15 @@ impl Guest for HttpServer {
         //        BTreeMap::new()
         //    }
         //};
+        //
+        let region_json = serde_json::to_string(&totals).unwrap();
 
         let template = Assets::get("index.html").unwrap();
         let reg = Handlebars::new();
         let data = reg
             .render_template(
                 std::str::from_utf8(&template.data).unwrap(),
-                &json!({"code": code, "location": region.name, "region_data": region_counts}),
+                &json!({"code": code, "location": region.name, "region_data": totals, "region_json": region_json}),
             )
             .unwrap();
 
