@@ -51,13 +51,13 @@
           </tr>
         </thead>
         <tbody>
-          {{#each region_data}
+          {{#each region_data as |s|}}
           <tr>
             <td>{{@key}}</td>
             <td>{{this}}</td>
           </tr>
           {{/each}}
-        </tbody>/
+        </tbody>
       </table>
     </div>
   </main>

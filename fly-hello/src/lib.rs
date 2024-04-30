@@ -68,17 +68,25 @@ impl std::io::Write for OutputStreamWriter<'_> {
 impl Guest for HttpServer {
     fn handle(request: IncomingRequest, response_out: ResponseOutparam) {
         let response = OutgoingResponse::new(Fields::new());
+        log(Level::Info, "fly-hello", "handling request");
         let path = request.path_with_query().unwrap();
         log(Level::Info, "fly-hello", path.as_str());
         let headers = request.headers();
         let host_key = "Host".to_string();
 
+        log(Level::Info, "fly-hello", format!("path {}", path).as_str());
+        log(
+            Level::Info,
+            "fly-hello",
+            format!("headers {:?}", headers).as_str(),
+        );
+
         // this panics when curling to localhost
         //request.authority().unwrap();
         // Instead you need to do this nonsense until wRPC is finished.
-        let host_header = headers.get(&host_key)[0].clone();
-        let host = std::str::from_utf8(&host_header).unwrap();
-        let url = match Url::parse(format!("http://{}{}", host, path.as_str()).as_str()) {
+        //let host_header = headers.get(&host_key)[0].clone();
+        //let host = std::str::from_utf8(&host_header).unwrap();
+        let url = match Url::parse(format!("whatever:{}", path.as_str()).as_str()) {
             Ok(u) => u,
             Err(e) => {
                 log(Level::Info, "fly-hello", format!("error: {}", e).as_str());
@@ -110,7 +118,6 @@ impl Guest for HttpServer {
 
         let region = metadata.region;
         let code = region.code.clone().unwrap_or_default();
-        log(Level::Error, "fly-hello", "Error calling Metadata.Get");
 
         // The redis store doesn't support a bucket name
         let bucket = match store::open("") {
@@ -171,30 +178,38 @@ impl Guest for HttpServer {
             };
         }
 
-        let values = match batch::get_many(&bucket, &keys) {
-            Ok(v) => v.iter().filter_map(|v| v.as_ref()).cloned().fold(
-                BTreeMap::new(),
-                |mut acc, (k, v)| {
-                    acc.insert(k, String::from_utf8_lossy(&v).to_string());
-                    acc
-                },
-            ),
-            Err(e) => {
-                log(
-                    Level::Error,
-                    "fly-hello",
-                    format!("Error getting values: {}", e).as_str(),
-                );
-                BTreeMap::new()
-            }
-        };
+        let mut region_counts = BTreeMap::new();
+        for key in keys {
+            log(Level::Info, "fly-hello", format!("key: {}", key).as_str());
+            if let Ok(Some(v)) = bucket.get(key.as_str()) {
+                region_counts.insert(key, String::from_utf8_lossy(&v).to_string());
+            };
+        }
+
+        //let values = match batch::get_many(&bucket, &keys) {
+        //    Ok(v) => v.iter().filter_map(|v| v.as_ref()).cloned().fold(
+        //        BTreeMap::new(),
+        //        |mut acc, (k, v)| {
+        //            acc.insert(k, String::from_utf8_lossy(&v).to_string());
+        //            acc
+        //        },
+        //    ),
+        //    Err(e) => {
+        //        log(
+        //            Level::Error,
+        //            "fly-hello",
+        //            format!("Error getting values: {}", e).as_str(),
+        //        );
+        //        BTreeMap::new()
+        //    }
+        //};
 
         let template = Assets::get("index.html").unwrap();
         let reg = Handlebars::new();
         let data = reg
             .render_template(
                 std::str::from_utf8(&template.data).unwrap(),
-                &json!({"code": code, "location": region.name, "region_data": values}),
+                &json!({"code": code, "location": region.name, "region_data": region_counts}),
             )
             .unwrap();
 

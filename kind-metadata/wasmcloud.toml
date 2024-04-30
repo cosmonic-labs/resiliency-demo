@@ -1,4 +1,4 @@
-name = "Fly.io Metadata Provider"
+name = "Kind Metadata Provider"
 language = "rust"
 type = "provider"
 

@@ -73,7 +73,7 @@ impl exports::cosmonic_labs::cloud_metadata::service::Handler<Option<Context>>
 
         let region_rec = Region {
             name: REGION_NAME.to_string(),
-            code: None,
+            code: Some(REGION_NAME.to_string()),
             city: None,
         };
 
