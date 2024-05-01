@@ -11,7 +11,7 @@ spec:
     - name: cloud-hello
       type: component
       properties:
-        image: ghcr.io/cosmonic-labs/cloud-hello:latest
+        image: ghcr.io/cosmonic-labs/cloud-hello:0.6.0
       traits:
         # Govern the spread/scheduling of the actor
         - type: daemonscaler
@@ -53,7 +53,7 @@ spec:
                   cloud: fly.io
         - type: link
           properties:
-            target: fly-hello
+            target: cloud-hello
             namespace: wasi
             package: http
             interfaces: [incoming-handler]
@@ -65,7 +65,7 @@ spec:
     - name: keyvalue
       type: capability
       properties:
-        image: ghcr.io/wasmcloud/keyvalue-redis:0.24.0
+        image: ghcr.io/wasmcloud/keyvalue-redis:canary
       traits:
         - type: spreadscaler
           properties:
@@ -79,7 +79,7 @@ spec:
     - name: fly-metadata
       type: capability
       properties:
-        image: ghcr.io/cosmonic-labs/fly-metadata:latest
+        image: ghcr.io/cosmonic-labs/fly-io-metadata:0.4.0
       traits:
         - type: daemonscaler
           properties:
