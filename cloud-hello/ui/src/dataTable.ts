@@ -1,5 +1,5 @@
 import example from "./data/example";
-
+import codes from "./data/codes";
 
 
 type RegionDataRow = {
@@ -30,48 +30,62 @@ function parseData(data: RegionData) {
   const osHeaders = [...osList].sort()
   const browserHeaders = [...browserList].sort()
 
-  const rows: (string | number)[][] = []
+  const regions: (string | number)[][] = []
 
-  for (const region in data) {
-    const rowData = data[region]
+  for (const code in data) {
+    const regionData = data[code]
 
-    const row = [
-      region,
-      rowData.visits,
-      ...osHeaders.map(os => rowData.os[os] ?? 0),
-      ...browserHeaders.map(browser => rowData.browsers[browser] ?? 0)
+    const region = [
+      code,
+      regionData.visits,
+      ...osHeaders.map(os => regionData.os[os] ?? 0),
+      ...browserHeaders.map(browser => regionData.browsers[browser] ?? 0)
     ]
 
-    rows.push(row)
+    regions.push(region)
   }
 
-  return {osHeaders, browserHeaders, rows}
+  return {osHeaders, browserHeaders, regions}
 }
 
 function getTableHtml(data: ReturnType<typeof parseData>) {
   // I really probably should have just used react for this project...
   const osth = data.osHeaders
   const brth = data.browserHeaders
+  const {regions} = data
+  const totalVals = osth.length + brth.length + 1
   return `
-  <table class="[&_th]:p-2 [&_th]:align-top [&_td]:p-2 bg-slate-300 rounded overflow-hidden">
-    <thead class="bg-slate-500 text-sm whitespace-nowrap">
-      <tr >
-        <th class="bg-black/10" rowspan="2" scope="col">Region</th>
-        <th class="bg-black/20" rowspan="2" scope="col">Visits</th>
-        <th class="bg-black/30" colspan="${osth.length}" scope="colgroup">OS</th>
-        <th class="bg-black/40" colspan="${brth.length}" scope="colgroup">Browser</th>
+  <table class="[&_th]:p-2 [&_th]:align-top [&_td]:p-2 bg-slate-500 rounded overflow-hidden">
+    <thead class="text-sm whitespace-nowrap text-white">
+      <tr>
+        <th colspan="2" rowspan="2" class="bg-sky-950/10">Visits</th>
+        <th colspan="${regions.length}">Region</th>
       </tr>
       <tr>
-        ${osth.map(os => `<th scope="col" class="bg-black/40">${os}</th>`).join('')}
-        ${brth.map(browser => `<th scope="col" class="bg-black/30">${browser}</th>`).join('')}
+        ${regions.map(region => `<th scope="col" class="bg-sky-950/30">${codes[region[0]]}</th>`).join('')}
       </tr>
     </thead>
-    <tbody class="text-black">
-      ${data.rows.map(row => `
-        <tr>
-          ${row.map(cell => `<td>${cell}</td>`).join('')}
-        </tr>
-      `).join('')}
+    <tbody class="text-black [&_th]:text-white text-left">
+      ${Array.from({length: totalVals}).map((_, i) => {
+        if (i === 0) {
+          return `<tr>
+            <th class="bg-sky-950/30" colspan="2" scope="row">Total</th>
+            ${regions.map(region => `<td class="bg-slate-300/80">${region[1]}</td>`).join('')}
+          </tr>`
+        }
+        if (i <= osth.length) {
+          return `<tr>
+            ${i === 1 ? `<th rowspan="${osth.length}" class="bg-sky-950/20 text-center [writing-mode:vertical-lr]">OS</th>` : ''}
+            <th scope="row">${osth[i - 1]}</th>
+            ${regions.map(region => `<td class="bg-slate-300">${region[i + 1]}</td>`).join('')}
+          </tr>`
+        }
+        return `<tr>
+          ${i === osth.length + 1 ? `<th rowspan="${brth.length}" class="bg-sky-950/30 text-center [writing-mode:vertical-lr]">Browser</th>` : ''}
+          <th class="bg-sky-950/10" scope="row">${brth[i - osth.length - 1]}</th>
+          ${regions.map(region => `<td class="bg-slate-300/80">${region[i + 1]}</td>`).join('')}
+        </tr>`
+      }).join('')}
     </tbody>
 </table>`
 }

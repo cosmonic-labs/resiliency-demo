@@ -34,4 +34,4 @@ export default {
   "waw": "Warsaw, Poland",
   "yul": "Montreal, Canada",
   "yyz": "Toronto, Canada"
-}
+} as Record<string, string>
