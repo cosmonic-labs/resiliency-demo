@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Argo + wasmCloud</title>
+  <link rel="stylesheet" href="./src/style.css" />
+  <script async defer src="./src/index.ts" type="module"></script>
+  <script id="data" type="application/json">{{{region_json}}}</script>
+</head>
+
+<body class="bg-gradient-to-bl from-sky-900 to-sky-950 text-white">
+  <main class="sticky top-0 container mx-auto px-8 flex -my-8 flex-col min-h-screen items-center justify-center">
+    <div class="flex flex-row w-full items-center justify-center gap-8 max-w-4xl mb-16 -mt-[3%]">
+      <div class="w-1/3 relative">
+        <div class="absolute flex items-center justify-center opacity-0 js-cycle">
+          <img class="top-1/2 -translate-y-1/2 w-full pt-[10%]" src="./src/assets/argo.svg" alt="Argo" />
+        </div>
+        <div class="absolute flex items-center justify-center opacity-0 js-cycle">
+          <img class="top-1/2 -translate-y-1/2 w-full" src="./src/assets/backstage.svg" alt="Backstage" />
+        </div>
+        <div class="absolute flex items-center justify-center opacity-0 js-cycle">
+          <img class="top-1/2 -translate-y-1/2 w-full" src="./src/assets/kubernetes.svg" alt="Kubernetes" />
+        </div>
+      </div>
+      <span class="font-semibold text-5xl text-neutral-200">+</span>
+      <img class="w-1/3 pt-[1%]" src="./src/assets/wasmCloud.svg" alt="wasmCloud" />
+    </div>
+    <div class="rounded-2xl bg-red-600 p-4  text-center min-w-80 max-w-fit rotate-1 mb-8">
+      <div class="pb-4 px-4">
+        <h1 class="uppercase text-5xl font-bold tracking-widest">Hello</h1>
+        <h2 class="uppercase text-2xl font-extrabold">My name is</h2>
+      </div>
+      <div class="bg-white rounded-xl text-neutral-900 p-8">
+        <h3 class="text-4xl font-script -rotate-2">wasmCloud-{{code}}</h3>
+      </div>
+    </div>
+    <div class="flex items-center justify-center text-3xl font-semibold gap-4">
+      <img class="w-11" src="./src/assets/pin.svg" alt="" />
+      <div>{{location}}</div>
+    </div>
+  </main>
+  <aside class="px-4 mx-auto relative">
+    <div class="bg-white mx-auto pb-10 rounded-t-xl shadow-2xl shadow-black max-w-fit overflow-x-scroll">
+      <div class="m-4 md:m-8" data-js="data-table"></div>
+    </div>
+  </aside>
+</body>
+
+</html>
