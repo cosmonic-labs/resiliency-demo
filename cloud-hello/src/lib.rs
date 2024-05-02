@@ -13,7 +13,7 @@ use wasi::logging::logging::*;
 use wrpc::keyvalue::{atomics, batch, store};
 
 #[derive(RustEmbed)]
-#[folder = "dist"]
+#[folder = "ui/dist"]
 struct Assets;
 
 struct HttpServer;
