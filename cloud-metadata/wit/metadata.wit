@@ -19,5 +19,6 @@ interface types {
 
 interface service {
   use types.{region, metadata, error};
+
   get: func() -> result<metadata, error>;
 }

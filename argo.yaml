@@ -1,0 +1,16 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: resiliency-demo
+  namespace: argocd
+spec:
+  source:
+    path: ./
+    repoURL: https://github.com/cosmonic-labs/resiliency-demo.git
+    targetRevision: HEAD
+    directory:
+      recurse: false
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: default
+  project: default

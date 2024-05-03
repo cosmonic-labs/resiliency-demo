@@ -85,7 +85,6 @@ impl exports::cosmonic_labs::cloud_metadata::service::Handler<Option<Context>>
         }
 
         let instance = instance[0];
-        //let app = instance.app.clone();
         let private_ip = instance.private_ip.clone().to_string();
         let region = match instance.node.region() {
             Some(r) => r,
