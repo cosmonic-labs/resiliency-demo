@@ -1,22 +1,31 @@
 wit_bindgen::generate!();
 
+use axum::{
+    extract::Path,
+    http::{HeaderMap, HeaderName, HeaderValue},
+    response::Response,
+    routing::get,
+    Router,
+};
 use cosmonic_labs::cloud_metadata::service;
 use exports::wasi::http::incoming_handler::Guest;
 use handlebars::Handlebars;
+use http::Request;
 use rust_embed::RustEmbed;
 use serde::Serialize;
 use serde_json::json;
 use std::{collections::BTreeMap, io::Write};
-use url::Url;
+use tower_service::Service;
 use wasi::http::types::*;
 use wasi::logging::logging::*;
 use wrpc::keyvalue::{atomics, batch, store};
 
+mod helpers;
+use helpers::*;
+
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
 struct Assets;
-
-struct HttpServer;
 
 #[derive(Serialize)]
 struct UAStats {
@@ -29,98 +38,16 @@ type RegionTotals = BTreeMap<String, UAStats>;
 
 const COMPONENT_NAME: &str = "cloud-hello";
 
-// This struct implementation is from
-// https://github.com/wasmCloud/wasmCloud/blob/ef3955a754ab59d2597dd1ef1801ac667eaf19a5/crates/actor/src/wrappers/io.rs#L45-L89
-// Copied here for convenience so we don't have to depend on the wasmcloud crate that implements
-// it.
-pub struct OutputStreamWriter<'a> {
-    stream: &'a mut crate::wasi::io::streams::OutputStream,
-}
+struct HttpServer;
 
-impl<'a> From<&'a mut crate::wasi::io::streams::OutputStream> for OutputStreamWriter<'a> {
-    fn from(stream: &'a mut crate::wasi::io::streams::OutputStream) -> Self {
-        Self { stream }
-    }
-}
-
-impl std::io::Write for OutputStreamWriter<'_> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        use crate::wasi::io::streams::StreamError;
-        use std::io;
-
-        let n = match self.stream.check_write().map(std::num::NonZeroU64::new) {
-            Ok(Some(n)) => n,
-            Ok(None) | Err(StreamError::Closed) => return Ok(0),
-            Err(StreamError::LastOperationFailed(e)) => {
-                return Err(io::Error::new(io::ErrorKind::Other, e.to_debug_string()))
-            }
-        };
-        let n = n
-            .get()
-            .try_into()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        let n = buf.len().min(n);
-        self.stream.write(&buf[..n]).map_err(|e| match e {
-            StreamError::Closed => io::ErrorKind::UnexpectedEof.into(),
-            StreamError::LastOperationFailed(e) => {
-                io::Error::new(io::ErrorKind::Other, e.to_debug_string())
-            }
-        })?;
-        Ok(n)
+impl HttpServer {
+    fn router() -> Router {
+        Router::new()
+            .route("/", get(HttpServer::index))
+            .route("/assets/:path", get(HttpServer::asset))
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.stream
-            .blocking_flush()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-    }
-}
-
-impl Guest for HttpServer {
-    fn handle(request: IncomingRequest, response_out: ResponseOutparam) {
-        let response = OutgoingResponse::new(Fields::new());
-        log(Level::Info, COMPONENT_NAME, "handling request");
-        let path = request.path_with_query().unwrap();
-        log(Level::Info, COMPONENT_NAME, path.as_str());
-        let headers = request.headers();
-
-        log(
-            Level::Info,
-            COMPONENT_NAME,
-            format!("path {}", path).as_str(),
-        );
-        log(
-            Level::Info,
-            COMPONENT_NAME,
-            format!("headers {:?}", headers).as_str(),
-        );
-
-        // this panics when curling to localhost
-        //request.authority().unwrap();
-        // Instead you need to do this nonsense until wRPC is finished.
-        //let host_header = headers.get(&host_key)[0].clone();
-        //let host = std::str::from_utf8(&host_header).unwrap();
-        // TODO replace with axum's router
-        let url = match Url::parse(format!("whatever:{}", path.as_str()).as_str()) {
-            Ok(u) => u,
-            Err(e) => {
-                log(
-                    Level::Info,
-                    COMPONENT_NAME,
-                    format!("error: {}", e).as_str(),
-                );
-                let response = error(format!("Error parsing URL: {}", e));
-                ResponseOutparam::set(response_out, Ok(response));
-                return;
-            }
-        };
-
-        if url.path() != "/" && url.path() != "/index.html" {
-            let resp = handle_asset(url);
-            ResponseOutparam::set(response_out, Ok(resp));
-            return;
-        }
-
+    async fn index(headers: HeaderMap) -> Response {
         let metadata = match service::get() {
             Ok(m) => m,
             Err(e) => {
@@ -129,9 +56,10 @@ impl Guest for HttpServer {
                     COMPONENT_NAME,
                     format!("Error getting metadata: {}", e).as_str(),
                 );
-                let response = error(format!("Error getting metadata: {}", e));
-                ResponseOutparam::set(response_out, Ok(response));
-                return;
+                return Response::builder()
+                    .status(500)
+                    .body(axum::body::Body::empty())
+                    .unwrap();
             }
         };
 
@@ -162,12 +90,10 @@ impl Guest for HttpServer {
             );
         }
 
-        let user_agent_key = "User-Agent".to_string();
-        let user_agent_header = headers.get(&user_agent_key);
-        if !user_agent_header.is_empty() {
-            let user_agent_header = user_agent_header[0].clone();
+        if let Some(user_agent) = headers.get("User-Agent") {
+            let user_agent_header = user_agent.as_bytes();
             let parser = woothee::parser::Parser::new();
-            let result = parser.parse(std::str::from_utf8(&user_agent_header).unwrap());
+            let result = parser.parse(std::str::from_utf8(user_agent_header).unwrap());
             if let Some(res) = result {
                 if let Err(e) =
                     atomics::increment("", format!("{}:browser:{}", code, res.name).as_str(), 1)
@@ -225,7 +151,7 @@ impl Guest for HttpServer {
         let mut data = BTreeMap::new();
         for key in keys {
             log(
-                Level::Info,
+                Level::Debug,
                 COMPONENT_NAME,
                 format!("key: {}", key).as_str(),
             );
@@ -298,69 +224,128 @@ impl Guest for HttpServer {
             )
             .unwrap();
 
-        response.set_status_code(200).unwrap();
-        let response_body = response.body().unwrap();
+        Response::builder()
+            .status(200)
+            .header("Content-Type", "text/html")
+            .body(axum::body::Body::from(data))
+            .unwrap()
+    }
 
+    async fn asset(Path(path): Path<String>) -> Response {
+        if let Some(asset) = Assets::get(format!("assets/{path}").as_str()) {
+            let mut response = Response::builder()
+                .status(200)
+                .body(axum::body::Body::from(asset.data.to_vec()))
+                .unwrap();
+            if path.contains(".js") {
+                response.headers_mut().insert(
+                    "Content-Type",
+                    HeaderValue::from_static("application/javascript"),
+                );
+            }
+            return response;
+        }
+
+        Response::builder()
+            .status(404)
+            .body(axum::body::Body::new("".to_string()))
+            .unwrap()
+    }
+
+    async fn to_wasi_response(resp: Response) -> OutgoingResponse {
+        let fields = Fields::new();
+        if !resp.headers().is_empty() {
+            for (k, v) in resp.headers() {
+                let value = [v.to_str().unwrap().to_string().into_bytes()];
+                fields.set(&k.as_str().to_string(), &value).unwrap();
+            }
+        }
+        let status = resp.status().as_u16();
+
+        let body = resp.into_body();
+        let b = axum::body::to_bytes(body, usize::MAX).await.unwrap();
+        let b2 = b.to_vec();
+
+        let response = OutgoingResponse::new(fields);
+        response.set_status_code(status).unwrap();
+        let response_body = response.body().unwrap();
         // Apparently wasmtime is really sensitive to holding resources for too long, so this
         // ensures that the writer is fully dropped by the time we want to finish the body stream.
         {
             let mut writer = response_body.write().unwrap();
             let mut w = OutputStreamWriter::from(&mut writer);
-            w.write_all(data.as_bytes()).expect("failed to write");
+            w.write_all(&b2).expect("failed to write");
             w.flush().expect("failed to flush");
         }
 
         OutgoingBody::finish(response_body, None).expect("failed to finish response body");
+        response
+    }
+}
+
+impl Guest for HttpServer {
+    fn handle(request: IncomingRequest, response_out: ResponseOutparam) {
+        log(Level::Info, COMPONENT_NAME, "handling request");
+        let path = request.path_with_query().unwrap();
+        log(Level::Info, COMPONENT_NAME, path.as_str());
+        let headers = request.headers();
+
+        log(
+            Level::Info,
+            COMPONENT_NAME,
+            format!("path {}", path).as_str(),
+        );
+        log(
+            Level::Info,
+            COMPONENT_NAME,
+            format!("headers {:?}", headers).as_str(),
+        );
+
+        let mut router = HttpServer::router();
+        let path = request.path_with_query().unwrap();
+        log(Level::Info, "http", &format!("path: {}", path));
+        let method = request.method().to_string();
+
+        let mut req = Request::builder().method(method.as_str()).uri(path);
+        let m = req.headers_mut().unwrap();
+        let entries = headers.entries().clone();
+
+        let entries: Vec<(String, Vec<u8>)> =
+            entries.into_iter().map(|(k, v)| (k.clone(), v)).collect();
+
+        for (k, v) in entries {
+            let hn = HeaderName::from_bytes(k.as_bytes()).unwrap();
+            let hv = HeaderValue::from_bytes(v.as_slice()).unwrap();
+            m.insert(hn, hv);
+        }
+
+        let r = req.body(axum::body::Body::empty()).unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = rt.block_on(async { router.call(r).await.unwrap() });
+        let response = rt.block_on(async { HttpServer::to_wasi_response(result).await });
         ResponseOutparam::set(response_out, Ok(response));
     }
 }
 
-fn error(message: String) -> OutgoingResponse {
-    let response = OutgoingResponse::new(Fields::new());
-    response.set_status_code(500).unwrap();
-    let response_body = response.body().unwrap();
-    response_body.write().unwrap();
-    response_body
-        .write()
-        .unwrap()
-        .blocking_write_and_flush(format!("Error: {}", message).as_bytes())
-        .unwrap();
-    OutgoingBody::finish(response_body, None).expect("failed to finish response body");
-    response
-}
-
-fn not_found() -> OutgoingResponse {
-    let response = OutgoingResponse::new(Fields::new());
-    response.set_status_code(404).unwrap();
-    let response_body = response.body().unwrap();
-    response_body.write().unwrap();
-    OutgoingBody::finish(response_body, None).expect("failed to finish response body");
-    response
-}
-
-fn handle_asset(url: Url) -> OutgoingResponse {
-    let fields = Fields::new();
-    log(Level::Info, COMPONENT_NAME, url.path());
-    let path = url.path().strip_prefix('/').unwrap();
-    if let Some(asset) = Assets::get(path) {
-        if path.contains(".js") {
-            let value = ["application/javascript".to_string().into_bytes()];
-            if let Err(e) = fields.set(&"Content-Type".to_string(), &value) {
-                log(
-                    Level::Error,
-                    COMPONENT_NAME,
-                    format!("Error setting header: {}", e).as_str(),
-                )
-            }
+// NOTE: since wit-bindgen creates these types in our namespace,
+// we can hang custom implementations off of them
+impl ToString for Method {
+    fn to_string(&self) -> String {
+        match self {
+            Method::Get => "GET".into(),
+            Method::Post => "POST".into(),
+            Method::Patch => "PATCH".into(),
+            Method::Put => "PUT".into(),
+            Method::Delete => "DELETE".into(),
+            Method::Options => "OPTIONS".into(),
+            Method::Head => "HEAD".into(),
+            Method::Connect => "CONNECT".into(),
+            Method::Trace => "TRACE".into(),
+            Method::Other(m) => m.into(),
         }
-
-        let response = OutgoingResponse::new(fields);
-        response.set_status_code(200).unwrap();
-        let response_body = response.body().unwrap();
-        response_body.write().unwrap().write(&asset.data).unwrap();
-        OutgoingBody::finish(response_body, None).expect("failed to finish response body");
-        return response;
     }
-    not_found()
 }
 export!(HttpServer);
