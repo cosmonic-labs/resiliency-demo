@@ -1,3 +1,4 @@
+#![allow(clippy::missing_safety_doc)]
 wit_bindgen::generate!();
 
 use axum::{
@@ -18,7 +19,7 @@ use std::{collections::BTreeMap, io::Write};
 use tower_service::Service;
 use wasi::http::types::*;
 use wasi::logging::logging::*;
-use wrpc::keyvalue::{atomics, batch, store};
+use wrpc::keyvalue::{atomics, store};
 
 mod helpers;
 use helpers::*;
