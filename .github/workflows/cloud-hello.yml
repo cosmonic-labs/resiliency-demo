@@ -84,7 +84,7 @@ jobs:
           fi
           wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/cloud-hello:$GITHUB_SHA build/cloud_hello_s.wasm
           wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/cloud-hello:$(git rev-parse --short HEAD) build/cloud_hello_s.wasm
-          #wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/cloud-hello:${{steps.ctx.outputs.version}} build/cloud_hello_s.wasm
+          wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/cloud-hello:${{steps.ctx.outputs.version}} build/cloud_hello_s.wasm
           digest=$(crane digest ${{env.REGISTRY}}/${{env.REPOSITORY}}/cloud-hello:$GITHUB_SHA)
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
         shell: bash

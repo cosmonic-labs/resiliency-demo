@@ -115,7 +115,7 @@ jobs:
 
           wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:$GITHUB_SHA ${{inputs.name}}.par.gz
           wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:$(git rev-parse --short HEAD) ${{inputs.name}}.par.gz
-          #wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:${{steps.ctx.outputs.version}} ${{inputs.name}}.par.gz
+          wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:${{steps.ctx.outputs.version}} ${{inputs.name}}.par.gz
 
       - name: Get digest
         id: digest
