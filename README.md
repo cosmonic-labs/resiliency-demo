@@ -114,3 +114,18 @@ wash app deploy resiliency-demo
 
 6. Visit the application in your browser. Navigate to `$APPNAME.fly.dev` to see the
    application in action!
+
+7. Refresh the page and see the region counters increase.
+
+8. Once you're ready, take out a region and see it seamlessly failover.
+
+### What's happening?
+
+![Steps](./assets/steps.png)
+
+1. HTTP Client makes a request
+1. HTTP Server Provider sends request to App Component
+1. Component gets Cloud Metadata info from Custom Interface and Provider
+1. Component queries the linked Keyvalue store for region data
+1. Keyvalue provider queries configured Valkey store
+1. Component generates and serves webpage
