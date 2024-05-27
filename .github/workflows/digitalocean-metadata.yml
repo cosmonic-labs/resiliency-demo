@@ -1,0 +1,39 @@
+name: digitalocean-metadata
+
+on:
+  pull_request:
+    paths:
+      - 'digitalocean-metadata/**'
+  merge_group:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - digitalocean-metadata-v*
+env:
+  REGISTRY: ghcr.io
+  REPOSITORY: ${{ github.repository }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo clippy --no-deps
+        working-directory: digitalocean-metadata
+
+  build:
+    needs:
+      - lint
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+      contents: read
+    uses: ./.github/workflows/provider.yml
+    with:
+      name: digitalocean-metadata
+    secrets:
+      issuer: ${{secrets.COSMONIC_LABS_SIGNING_ACCOUNT}}
+      subject: ${{secrets.DIGITALOCEAN_PROVIDER_KEY}}

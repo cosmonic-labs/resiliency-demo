@@ -46,6 +46,14 @@ impl HttpServer {
         Router::new()
             .route("/", get(HttpServer::index))
             .route("/assets/:path", get(HttpServer::asset))
+            .route("/health", get(HttpServer::health))
+    }
+
+    async fn health() -> Response {
+        Response::builder()
+            .status(200)
+            .body(axum::body::Body::empty())
+            .unwrap()
     }
 
     async fn index(headers: HeaderMap) -> Response {

@@ -1,0 +1,6 @@
+package cosmonic-labs:provider-digitalocean-metadata;
+
+world provider-digigtalocean-metadata {
+    export cosmonic-labs:cloud-metadata/service@0.1.0;
+}
+

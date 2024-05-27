@@ -16,7 +16,7 @@ wit_bindgen_wrpc::generate!();
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     FlyIoMetadataProvider::run().await?;
-    eprintln!("Long running operation provider exiting");
+    eprintln!("fly-io metadata provider exiting");
     Ok(())
 }
 
@@ -27,11 +27,10 @@ impl FlyIoMetadataProvider {
     async fn run() -> anyhow::Result<()> {
         let host_data = load_host_data().context("failed to load host data")?;
         let provider = Self::from_host_data(host_data);
-        let shutdown = run_provider(provider.clone(), "operations-provider")
+        let shutdown = run_provider(provider.clone(), "fly-io-metadata")
             .await
             .context("failed to run provider")?;
         let connection = get_connection();
-        eprintln!("here");
         serve(
             &connection.get_wrpc_client(connection.provider_key()),
             provider,
