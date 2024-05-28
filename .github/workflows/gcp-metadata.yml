@@ -1,0 +1,39 @@
+name: gcp-metadata
+
+on:
+  pull_request:
+    paths:
+      - 'gcp-metadata/**'
+  merge_group:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - gcp-metadata-v*
+env:
+  REGISTRY: ghcr.io
+  REPOSITORY: ${{ github.repository }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo clippy --no-deps
+        working-directory: gcp-metadata
+
+  build:
+    needs:
+      - lint
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+      contents: read
+    uses: ./.github/workflows/provider.yml
+    with:
+      name: gcp-metadata
+    secrets:
+      issuer: ${{secrets.COSMONIC_LABS_SIGNING_ACCOUNT}}
+      subject: ${{secrets.GCP_PROVIDER_KEY}}

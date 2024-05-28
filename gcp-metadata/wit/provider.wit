@@ -1,0 +1,6 @@
+package cosmonic-labs:provider-gcp-metadata;
+
+world provider-gcp-metadata {
+    export cosmonic-labs:cloud-metadata/service@0.1.0;
+}
+

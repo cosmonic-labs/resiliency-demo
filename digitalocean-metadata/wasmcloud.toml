@@ -1,0 +1,6 @@
+name = "DigitalOcean Metadata Provider"
+language = "rust"
+type = "provider"
+
+[provider]
+vendor = "Cosmonic Labs"

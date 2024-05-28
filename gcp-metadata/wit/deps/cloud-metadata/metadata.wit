@@ -1,0 +1,23 @@
+interface types {
+  record error {
+    message: string,
+  }
+
+  record region {
+    name: string,
+    code: option<string>,
+    city: option<string>,
+  }
+
+  record metadata {
+    private-ip: string,
+    public-ip: option<string>,
+    region: region,
+    id: string,
+  }
+}
+
+interface service {
+  use types.{region, metadata, error};
+  get: func() -> result<metadata, error>;
+}

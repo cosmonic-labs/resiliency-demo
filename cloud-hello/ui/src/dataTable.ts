@@ -62,7 +62,7 @@ function getTableHtml(data: ReturnType<typeof parseData>) {
         <th colspan="${regions.length}">Region</th>
       </tr>
       <tr>
-        ${regions.map(region => `<th scope="col" class="bg-sky-950/30">${codes[region[0]]}</th>`).join('')}
+        ${regions.map(region => `<th scope="col" class="bg-sky-950/30">${codes[region[0]] || region[0]}</th>`).join('')}
       </tr>
     </thead>
     <tbody class="text-black [&_th]:text-white text-left">

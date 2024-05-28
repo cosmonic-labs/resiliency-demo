@@ -1,6 +1,6 @@
 package cosmonic-labs:provider-fly-io-metadata;
 
-world provider-longrunning-operation {
+world provider-fly-io-metadata {
     export cosmonic-labs:cloud-metadata/service@0.1.0;
 }
 

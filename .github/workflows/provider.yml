@@ -49,21 +49,24 @@ jobs:
           path: ${{inputs.name}}/${{inputs.name}}
   release:
     needs: [build]
-    if: startsWith(github.ref, 'refs/tags/${{inputs.name}}-v')
+    if: ${{startsWith(github.ref, format('refs/tags/{0}-v', inputs.name))}}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract tag context
-        id: ctx
-        run: |
-          sha_short=$(git rev-parse --short HEAD)
-          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
-          echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
-          echo "version=${GITHUB_REF#refs/tags/${{inputs.name}}v}" >> "$GITHUB_OUTPUT"
-          echo "artifact_name=$(echo ${{inputs.name}} | tr '- "')" >> "$GITHUB_OUTPUT"
-      - uses: taiki-e/install-action@v2
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          tool: wash-cli@0.28.0
+          images: ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}
+          tags: |
+            type=sha,prefix=
+            type=semver,pattern={{version}},event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Install wash
+        run: |
+          curl -s https://packagecloud.io/install/repositories/wasmCloud/core/script.deb.sh | sudo bash
+          sudo apt install wash
 
       # Used later in the build process to push provenance info
       - name: Login to GitHub Container Registry
@@ -109,13 +112,15 @@ jobs:
           --destination "${{ inputs.name }}.par.gz" \
           --name "${{ inputs.name }}-provider" \
           --vendor cosmonic-labs \
-          --version ${{ steps.ctx.outputs.version }}
+          --version ${{ steps.meta.outputs.version }}
 
           wash par insert --arch aarch64-linux --binary "${{inputs.name }}-aarch64" "${{ inputs.name }}.par.gz"
 
-          wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:$GITHUB_SHA ${{inputs.name}}.par.gz
-          wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:$(git rev-parse --short HEAD) ${{inputs.name}}.par.gz
-          wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:${{steps.ctx.outputs.version}} ${{inputs.name}}.par.gz
+          #wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:$GITHUB_SHA ${{inputs.name}}.par.gz
+          #wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:$(git rev-parse --short HEAD) ${{inputs.name}}.par.gz
+          #wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:${{steps.ctx.outputs.version}} ${{inputs.name}}.par.gz
+          wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:${{fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision']}} ${{inputs.name}}.par.gz
+          wash push ${{env.REGISTRY}}/${{env.REPOSITORY}}/${{inputs.name}}:${{steps.meta.outputs.version}} ${{inputs.name}}.par.gz
 
       - name: Get digest
         id: digest
