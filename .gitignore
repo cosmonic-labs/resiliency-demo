@@ -8,6 +8,7 @@
 /dist/
 /target
 **target
+cloud-hello/ui/dist/
 
 ## File system
 .DS_Store
