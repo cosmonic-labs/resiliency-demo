@@ -6,6 +6,7 @@ resolver = "2"
 
 [dependencies]
 anyhow = "1"
+curve25519-dalek = { version = "4.1.3" }
 flytrap = { git = "https://github.com/protochron/flytrap", branch = "fix_truncation", default-features = false, features = ["dns", "regions", "detect", "http"] }
 hostname = "0.3"
 tracing = "0.1"
